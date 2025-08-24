@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>⚽ Football Match Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg1: #0f172a;
+      --bg2: #111827;
+      --accent: #fbbf24;
+      --card: #1f2937;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: 'Poppins', sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 20% 20%, #1e293b, var(--bg1) 40%), linear-gradient(120deg, var(--bg1), var(--bg2));
+    }
+
+    .card {
+      width: min(720px, 94vw);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 28px;
+      letter-spacing: 0.3px;
+    }
+
+    p.sub {
+      margin: 0 0 20px;
+      color: var(--muted);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    select,
+    button {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 15px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: var(--card);
+      color: var(--text);
+      outline: none;
+    }
+
+    button {
+      background: var(--accent);
+      color: #040404;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      transition: transform .06s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .result {
+      margin-top: 18px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .error {
+      margin-top: 12px;
+      color: #fecaca;
+    }
+
+    .prob {
+      margin-top: 12px;
+    }
+
+    .bar {
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .bar>div {
+      height: 100%;
+      background: var(--accent);
+      width: 0;
+      transition: width .35s ease;
+    }
+
+    .prob-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 60px;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0;
+    }
+
+    footer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: right;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>⚽ Football Match Predictor</h1>
+    <p class="sub">Pick the teams and get the predicted outcome (Home Win / Away Win / Draw).</p>
+
+    <div class="row">
+      <div>
+        <label for="homeTeam">Home Team</label>
+        <select id="homeTeam"></select>
+      </div>
+      <div>
+        <label for="awayTeam">Away Team</label>
+        <select id="awayTeam"></select>
+      </div>
+    </div>
+
+    <button id="predictBtn">Predict</button>
+
+    <div id="msg" class="result"></div>
+    <div id="err" class="error"></div>
+
+    <div id="probs" class="prob" style="display:none;">
+      <div class="prob-row">
+        <div>Home Win</div>
+        <div class="bar">
+          <div id="p1"></div>
+        </div>
+        <div id="t1">0%</div>
+      </div>
+      <div class="prob-row">
+        <div>Away Win</div>
+        <div class="bar">
+          <div id="p0"></div>
+        </div>
+        <div id="t0">0%</div>
+      </div>
+      <div class="prob-row">
+        <div>Draw</div>
+        <div class="bar">
+          <div id="p2"></div>
+        </div>
+        <div id="t2">0%</div>
+      </div>
+    </div>
+
+    <footer>Model: RandomForest (GridSearch-tuned). Static data export.</footer>
+  </div>
+
+  <script>
+    async function loadTeams() {
+      const res = await fetch('/api/teams');
+      const data = await res.json();
+      const homeSel = document.getElementById('homeTeam');
+      const awaySel = document.getElementById('awayTeam');
+      homeSel.innerHTML = '';
+      awaySel.innerHTML = '';
+      data.teams.forEach(t => {
+        const opt1 = document.createElement('option');
+        opt1.value = t.id;
+        opt1.textContent = t.name;
+
+        const opt2 = document.createElement('option');
+        opt2.value = t.id;
+        opt2.textContent = t.name;
+
+        homeSel.appendChild(opt1);
+        awaySel.appendChild(opt2);
+
+      });
+      // If possible, pick two distinct defaults
+      if (awaySel.options.length > 1) awaySel.selectedIndex = 1;
+    }
+
+    function setProb(id, val) {
+      const pct = Math.round(val * 100);
+      document.getElementById('t' + id).textContent = pct + '%';
+      document.getElementById('p' + id).style.width = pct + '%';
+    }
+
+    async function predict() {
+      const msg = document.getElementById('msg');
+      const err = document.getElementById('err');
+      const probs = document.getElementById('probs');
+      msg.textContent = ''; err.textContent = ''; probs.style.display = 'none';
+
+      const homeId = document.getElementById('homeTeam').value;
+      const awayId = document.getElementById('awayTeam').value;
+
+      try {
+        const res = await fetch('/api/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ homeTeamId: homeId, awayTeamId: awayId })
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Prediction failed');
+
+        msg.textContent = 'Prediction: ' + data.prediction;
+
+        if (data.probabilities) {
+          // probabilities keyed by raw classes {0,1,2}
+          setProb(1, data.probabilities['1'] || 0);
+          setProb(0, data.probabilities['0'] || 0);
+          setProb(2, data.probabilities['2'] || 0);
+          probs.style.display = 'block';
+        }
+      } catch (e) {
+        err.textContent = e.message;
+      }
+    }
+
+    document.getElementById('predictBtn').addEventListener('click', predict);
+    loadTeams();
+  </script>
+</body>
+
+</html>
